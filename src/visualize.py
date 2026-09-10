@@ -1,79 +1,59 @@
 import cv2
-from pathlib import Path
 
 
-def draw_ocr_boxes(
-    image_path,
-    ocr_items,
-    output_path
-):
+def draw_ocr_boxes(image, ocr_items, output_path):
 
-    image = cv2.imread(str(image_path))
+    # If image is a file path, load it
+    if isinstance(image, (str, bytes)):
+        image = cv2.imread(image)
 
-    if image is None:
-        raise FileNotFoundError(
-            f"Could not read image: {image_path}"
-        )
-
-    for index, item in enumerate(ocr_items):
-
-        box = item["box"]
-
-        # Convert box to OpenCV format
-        points = [
-            [int(point[0]), int(point[1])]
-            for point in box
-        ]
-
-        # Draw polygon
-        for i in range(len(points)):
-
-            start = tuple(points[i])
-
-            end = tuple(
-                points[
-                    (i + 1) % len(points)
-                ]
+        if image is None:
+            raise FileNotFoundError(
+                f"Could not read image: {image}"
             )
 
+    # Make a copy so the original image is not modified
+    output = image.copy()
+
+    for item in ocr_items:
+
+        box = item["box"]
+        text = item["text"]
+        confidence = item["confidence"]
+
+        # Convert box to OpenCV integer format
+        points = [
+            (int(x), int(y))
+            for x, y in box
+        ]
+
+        # Draw OCR bounding box
+        for i in range(len(points)):
             cv2.line(
-                image,
-                start,
-                end,
+                output,
+                points[i],
+                points[(i + 1) % len(points)],
                 (0, 255, 0),
                 2
             )
 
-        # Label
-        x = item["x1"]
-        y = max(item["y1"] - 5, 15)
+        # Label position
+        x, y = points[0]
 
-        label = f"{index}: {item['text']}"
+        label = f"{text} ({confidence:.2f})"
 
         cv2.putText(
-            image,
+            output,
             label,
-            (x, y),
+            (x, max(y - 5, 15)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            0.45,
-            (0, 0, 255),
+            0.5,
+            (0, 255, 0),
             1,
             cv2.LINE_AA
         )
 
-    # Create output directory
-    output_path = Path(output_path)
-
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
     cv2.imwrite(
         str(output_path),
-        image
-    )
-
-    print(
-        f"Debug image saved to: {output_path}"
+        output
     )
