@@ -3,6 +3,7 @@ import os
 os.environ["FLAGS_use_mkldnn"] = "0"
 
 import json
+import cv2
 from pathlib import Path
 
 from paddleocr import PaddleOCR
@@ -10,6 +11,10 @@ from paddleocr import PaddleOCR
 from ocr_utils import create_ocr_items
 from field_extraction import extract_fields
 from visualize import draw_ocr_boxes
+from gliner_extractor import GLiNERExtractor
+from field_resolver import resolve_fields
+from text_reconstruction import reconstruct_text
+from preprocessing import preprocess_card
 
 
 # ============================================================
@@ -21,7 +26,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 IMAGE_DIR = PROJECT_ROOT / "data" / "images"
 OUTPUT_DIR = PROJECT_ROOT / "outputs"
 DEBUG_DIR = PROJECT_ROOT / "data" / "debug"
-
 
 # Create directories
 OUTPUT_DIR.mkdir(
@@ -42,12 +46,13 @@ DEBUG_DIR.mkdir(
 print("Loading PaddleOCR...")
 
 ocr = PaddleOCR(
-    lang="en",
+    lang="ar",
     enable_mkldnn=False
 )
 
 print("PaddleOCR loaded.")
 
+gliner = GLiNERExtractor()
 
 # ============================================================
 # FIND IMAGES
@@ -96,12 +101,27 @@ for image_path in image_paths:
 
     try:
 
-        # ----------------------------------------------------
-        # OCR
-        # ----------------------------------------------------
+        image = cv2.imread(str(image_path))
+
+        if image is None:
+            raise FileNotFoundError(
+                f"Could not load image: {image_path}"
+            )
+
+
+# ----------------------------------------------------
+# PREPROCESS BUSINESS CARD
+# ----------------------------------------------------
+
+        processed_image = preprocess_card(image)
+
+
+# ----------------------------------------------------
+# OCR
+# ----------------------------------------------------
 
         result = ocr.predict(
-            str(image_path)
+            processed_image
         )
 
 
@@ -124,6 +144,15 @@ for image_path in image_paths:
                 boxes
             )
 
+            # ------------------------------------------------
+            # Reconstruct OCR text
+            # ------------------------------------------------
+
+            reconstructed_text = reconstruct_text(
+                ocr_items,
+                y_tolerance=15
+                )
+
 
             # ------------------------------------------------
             # Visual debugging
@@ -135,7 +164,7 @@ for image_path in image_paths:
             )
 
             draw_ocr_boxes(
-                image_path,
+                processed_image,
                 ocr_items,
                 debug_path
             )
@@ -145,9 +174,20 @@ for image_path in image_paths:
             # Field extraction
             # ------------------------------------------------
 
-            fields = extract_fields(
-                texts,
-                boxes
+            # Existing rule-based extraction
+            texts = [item["text"] for item in ocr_items]
+            boxes = [item["box"] for item in ocr_items]
+
+            rule_fields = extract_fields(texts, boxes)
+
+            # GLiNER extraction
+            gliner_entities = gliner.extract(reconstructed_text)
+
+            # Combine both
+            fields, field_confidence, field_levels = resolve_fields(
+                ocr_items,
+                gliner_entities,
+                rule_fields
             )
 
 
@@ -161,7 +201,16 @@ for image_path in image_paths:
 
                 "fields": fields,
 
-                "ocr": ocr_items
+                "gliner": gliner_entities,
+
+                "ocr": ocr_items,
+
+                "field_levels": field_levels,
+
+                "field_confidence": field_confidence,
+
+                "reconstructed_text": reconstructed_text
+
             }
 
 
@@ -192,6 +241,9 @@ for image_path in image_paths:
             # ------------------------------------------------
             # Print result
             # ------------------------------------------------
+
+            print("\nReconstructed OCR:")
+            print(reconstructed_text)
 
             print("\nExtracted fields:")
 
