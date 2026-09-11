@@ -62,7 +62,7 @@ def merge_address_entities(gliner_entities):
     address_entities = [
         entity
         for entity in gliner_entities
-        if entity["label"] == "address"
+        if entity["label"] == "physical address"
     ]
 
     if not address_entities:
@@ -130,11 +130,14 @@ def resolve_fields(ocr_items, gliner_entities, rule_fields):
     # --------------------------------------------------------
 
     gliner_map = {
-        "person name": "name",
-        "organization": "organization",
-        "job title": "designation",
-        "address": "address"
-    }
+    "person name": "name",
+    "company name": "organization",
+    "job title": "designation",
+    "physical address": "address",
+    "phone number": "phone",
+    "email address": "email",
+    "website": "website"
+}
 
     # --------------------------------------------------------
     # Track values already assigned
@@ -240,12 +243,12 @@ def resolve_fields(ocr_items, gliner_entities, rule_fields):
         # ADDRESS
         # ----------------------------------------------------
 
-        elif field == "address":
+        elif field in {"phone", "email", "website", "address"}:
 
-            if not result["address"]:
+            if not result[field]:
 
-                result["address"] = entity_text
-                field_confidence["address"] = score
+                result[field] = entity_text
+                field_confidence[field] = score
 
     # --------------------------------------------------------
     # GLiNER address fallback
@@ -265,7 +268,7 @@ def resolve_fields(ocr_items, gliner_entities, rule_fields):
             address_scores = [
                 entity["score"]
                 for entity in gliner_entities
-                if entity["label"] == "address"
+                if entity["label"] == "physical address"
             ]
 
             if address_scores:
@@ -353,7 +356,7 @@ def gliner_supports_field(
         # Organization
         if (
             field == "organization"
-            and entity["label"] == "organization"
+            and entity["label"] == "company name"
         ):
             if (
                 entity_value in value_normalized
@@ -386,7 +389,7 @@ def gliner_supports_field(
         # Address
         if (
             field == "address"
-            and entity["label"] == "address"
+            and entity["label"] == "physical address"
         ):
             if (
                 entity_value in value_normalized

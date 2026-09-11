@@ -68,11 +68,26 @@ image_extensions = [
 
 image_paths = []
 
-for extension in image_extensions:
+selected_image = os.environ.get("BUSINESS_CARD_IMAGE")
 
-    image_paths.extend(
-        IMAGE_DIR.glob(extension)
-    )
+if selected_image:
+
+    selected_path = Path(selected_image)
+
+    if not selected_path.is_file():
+        raise FileNotFoundError(
+            f"Selected image does not exist: {selected_path}"
+        )
+
+    image_paths.append(selected_path)
+
+else:
+
+    for extension in image_extensions:
+
+        image_paths.extend(
+            IMAGE_DIR.glob(extension)
+        )
 
 
 # Sort images
@@ -173,15 +188,26 @@ for image_path in image_paths:
             # ------------------------------------------------
             # Field extraction
             # ------------------------------------------------
-
+            # GLiNER extraction
+            gliner_entities = gliner.extract(reconstructed_text)
             # Existing rule-based extraction
             texts = [item["text"] for item in ocr_items]
             boxes = [item["box"] for item in ocr_items]
 
-            rule_fields = extract_fields(texts, boxes)
+            rule_fields = extract_fields(texts, boxes, gliner_entities)
 
-            # GLiNER extraction
-            gliner_entities = gliner.extract(reconstructed_text)
+            
+
+            print("\n" + "=" * 60)
+            print("GLiNER ENTITIES")
+            print("=" * 60)
+
+            for entity in gliner_entities:
+                print(
+                    f"{entity['text']} "
+                    f"-> {entity['label']} "
+                    f"({entity['score']:.3f})"
+                )
 
             # Combine both
             fields, field_confidence, field_levels = resolve_fields(
