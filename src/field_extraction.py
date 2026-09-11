@@ -7,17 +7,17 @@ import re
 
 def is_email(text):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return re.match(pattern, text.strip()) is not None
+    return re.match(pattern, text) is not None
 
 
 def is_phone(text):
     pattern = r'^\+?\d[\d\s().-]{7,}\d$'
-    return re.match(pattern, text.strip()) is not None
+    return re.match(pattern, text) is not None
 
 
 def is_website(text):
     pattern = r'^(https?://)?(www\.)?[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(/.*)?$'
-    return re.match(pattern, text.strip()) is not None
+    return re.match(pattern, text) is not None
 
 
 # ============================================================
@@ -47,22 +47,7 @@ DESIGNATION_KEYWORDS = [
     "supervisor",
     "lead",
     "head",
-    "photographer",
-    "accountant",
-    "marketing",
-    "sales",
-    "salesman",
-    "secretary",
-    "specialist",
-    "coordinator",
-    "analyst",
-    "intern",
-    "assistant",
-    "partner",
-    "owner",
-    "director",
-    "managing director",
-    "operations"
+    "photographer"
 ]
 
 
@@ -90,17 +75,7 @@ ADDRESS_KEYWORDS = [
     "delhi",
     "tamil nadu",
     "pin",
-    "pincode",
-    "box",
-    "p.o.box",
-    "po box",
-    "building",
-    "floor",
-    "suite",
-    "dubai",
-    "uae",
-    "deira",
-    "barsha"
+    "pincode"
 ]
 
 
@@ -120,17 +95,7 @@ ORGANIZATION_KEYWORDS = [
     "group",
     "services",
     "studio",
-    "agency",
-    "trading",
-    "consulting",
-    "tech",
-    "llc",
-    "l.l.c",
-    "inc",
-    "inc.",
-    "co.",
-    "enterprise",
-    "enterprises"
+    "agency"
 ]
 
 
@@ -168,25 +133,7 @@ def looks_like_organization(text):
     )
 
 
-# ============================================================
-# TEXT HELPERS
-# ============================================================
-
-def clean_text(text):
-
-    return re.sub(
-        r"\s+",
-        " ",
-        text
-    ).strip()
-
-
 def looks_like_name(text):
-
-    text = clean_text(text)
-
-    if not text:
-        return False
 
     if any(char.isdigit() for char in text):
         return False
@@ -194,74 +141,18 @@ def looks_like_name(text):
     if "@" in text:
         return False
 
-    if is_website(text):
-        return False
-
-    if is_phone(text):
-        return False
-
-    if contains_designation_keyword(text):
-        return False
-
-    if contains_address_keyword(text):
-        return False
-
-    if looks_like_organization(text):
-        return False
-
     if "." in text:
         return False
 
     words = text.split()
 
-    # Person names normally contain 2-4 words
-    if not 2 <= len(words) <= 4:
+    if not 1 <= len(words) <= 4:
         return False
 
     if len(text) > 40:
         return False
 
     return True
-
-
-# ============================================================
-# ORGANIZATION SCORE
-# ============================================================
-
-def organization_score(text):
-
-    text = clean_text(text)
-
-    score = 0
-
-    if looks_like_organization(text):
-        score += 10
-
-    # Corporate suffixes
-    upper = text.upper()
-
-    if any(
-        suffix in upper
-        for suffix in [
-            "LLC",
-            "L.L.C",
-            "LTD",
-            "LIMITED",
-            "INC",
-            "PVT",
-            "PRIVATE",
-            "CORP"
-        ]
-    ):
-        score += 8
-
-    # Organization-like length
-    word_count = len(text.split())
-
-    if 1 <= word_count <= 6:
-        score += 2
-
-    return score
 
 
 # ============================================================
@@ -299,7 +190,7 @@ def create_items(texts, boxes):
 
     for text, box in zip(texts, boxes):
 
-        text = clean_text(text)
+        text = text.strip()
 
         if not text:
             continue
@@ -331,12 +222,9 @@ def group_address_lines(address_items):
     if not address_items:
         return None
 
-    address_items = sorted(
-        address_items,
-        key=lambda item: (
-            item["center_y"],
-            item["x1"]
-        )
+    # Sort top → bottom
+    address_items.sort(
+        key=lambda item: item["center_y"]
     )
 
     lines = []
@@ -344,6 +232,7 @@ def group_address_lines(address_items):
     for item in address_items:
 
         if not lines:
+
             lines.append([item])
             continue
 
@@ -353,16 +242,21 @@ def group_address_lines(address_items):
             item["y1"] - previous["y2"]
         )
 
+        # If lines are close vertically,
+        # treat them as part of the same address.
         if vertical_gap <= 25:
+
             lines[-1].append(item)
 
         else:
+
             lines.append([item])
 
     combined_lines = []
 
     for line in lines:
 
+        # Left → right
         line.sort(
             key=lambda item: item["x1"]
         )
@@ -375,107 +269,6 @@ def group_address_lines(address_items):
         combined_lines.append(line_text)
 
     return ", ".join(combined_lines)
-
-
-# ============================================================
-# FIND PERSON NAME
-# ============================================================
-
-def find_name(items, designation, organization):
-
-    candidates = []
-
-    for item in items:
-
-        text = item["text"]
-
-        if designation and text == designation["text"]:
-            continue
-
-        if organization and text == organization:
-            continue
-
-        if looks_like_name(text):
-
-            score = 0
-
-            # Prefer 2-word names
-            words = len(text.split())
-
-            if words == 2:
-                score += 5
-
-            elif words == 3:
-                score += 4
-
-            # Names often appear near the top
-            score += max(
-                0,
-                3 - (item["center_y"] / 300)
-            )
-
-            candidates.append(
-                (score, item)
-            )
-
-    if not candidates:
-        return None
-
-    candidates.sort(
-        key=lambda x: x[0],
-        reverse=True
-    )
-
-    return candidates[0][1]
-
-
-# ============================================================
-# FIND ORGANIZATION
-# ============================================================
-
-def find_organization(items, name, designation):
-
-    candidates = []
-
-    for item in items:
-
-        text = item["text"]
-
-        if name and text == name["text"]:
-            continue
-
-        if designation and text == designation["text"]:
-            continue
-
-        score = organization_score(text)
-
-        if score == 0:
-            continue
-
-        # Organization often occurs near the name/designation
-        if name:
-
-            distance = abs(
-                item["center_y"] -
-                name["center_y"]
-            )
-
-            if distance < 250:
-                score += 2
-
-        candidates.append(
-            (score, item)
-        )
-
-    if not candidates:
-        return None
-
-    candidates.sort(
-        key=lambda x: x[0],
-        reverse=True
-    )
-
-    return candidates[0][1]
 
 
 # ============================================================
@@ -514,18 +307,22 @@ def extract_fields(texts, boxes):
 
         text = item["text"]
 
+        # Email
         if is_email(text):
 
             result["email"] = text
 
+        # Phone
         elif is_phone(text):
 
             result["phone"] = text
 
+        # Website
         elif is_website(text):
 
             result["website"] = text
 
+        # Address
         elif contains_address_keyword(text):
 
             address_items.append(item)
@@ -535,7 +332,7 @@ def extract_fields(texts, boxes):
             remaining.append(item)
 
     # --------------------------------------------------------
-    # Address
+    # Group address
     # --------------------------------------------------------
 
     if address_items:
@@ -545,16 +342,16 @@ def extract_fields(texts, boxes):
         )
 
     # --------------------------------------------------------
-    # Sort remaining
+    # Sort remaining text by vertical position
     # --------------------------------------------------------
 
     remaining.sort(
         key=lambda item: item["center_y"]
     )
 
-    # --------------------------------------------------------
-    # Designation
-    # --------------------------------------------------------
+    # ========================================================
+    # FIND DESIGNATION
+    # ========================================================
 
     designation = None
 
@@ -570,37 +367,80 @@ def extract_fields(texts, boxes):
 
             break
 
-    # --------------------------------------------------------
-    # Organization
-    # --------------------------------------------------------
+    if designation:
 
-    organization = find_organization(
-        remaining,
-        None,
-        designation
-    )
+        remaining.remove(designation)
 
-    if organization:
+    # ========================================================
+    # FIND NAME
+    # ========================================================
 
-        result["organization"] = organization["text"]
+    name = None
 
-    # --------------------------------------------------------
-    # Name
-    # --------------------------------------------------------
+    for item in remaining:
 
-    name = find_name(
-        remaining,
-        designation,
-        organization
-    )
+        if looks_like_name(item["text"]):
+
+            name = item
+
+            result["name"] = item["text"]
+
+            break
 
     if name:
 
-        result["name"] = name["text"]
+        remaining.remove(name)
 
-    # --------------------------------------------------------
-    # If organization was not found,
-    # don't randomly assign remaining text.
-    # --------------------------------------------------------
+    # ========================================================
+    # FIND ORGANIZATION
+    # ========================================================
+
+    if remaining:
+
+        organization_candidates = []
+
+        for item in remaining:
+
+            text = item["text"]
+
+            score = 0
+
+            # Known organization keywords
+            if looks_like_organization(text):
+                score += 10
+
+            # Short organization names
+            if len(text.split()) <= 5:
+                score += 2
+
+            # Organization is commonly below
+            # the person's name
+            if name:
+
+                if item["center_y"] > name["center_y"]:
+                    score += 2
+
+            item["organization_score"] = score
+
+            organization_candidates.append(item)
+
+        # Highest score first
+        organization_candidates.sort(
+            key=lambda item: (
+                -item["organization_score"],
+                item["center_y"]
+            )
+        )
+
+        if organization_candidates:
+
+            result["organization"] = (
+                organization_candidates[0]["text"]
+            )
+
+    # ========================================================
+    # RETURN RESULT
+    # ========================================================
 
     return result
+
