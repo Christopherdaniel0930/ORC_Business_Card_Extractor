@@ -25,8 +25,13 @@ FIELDS = [
 # Normalization
 # --------------------------------------------------
 
+def is_missing(value):
+    """Treat JSON nulls and common text placeholders as absent values."""
+    return value is None or str(value).strip().lower() in {"", "none", "null", "n/a"}
+
+
 def normalize_general(text):
-    if text is None:
+    if is_missing(text):
         return ""
 
     text = str(text).lower().strip()
@@ -38,7 +43,7 @@ def normalize_general(text):
 
 
 def normalize_phone(text):
-    if text is None:
+    if is_missing(text):
         return ""
 
     # Keep only digits
@@ -46,14 +51,14 @@ def normalize_phone(text):
 
 
 def normalize_email(text):
-    if text is None:
+    if is_missing(text):
         return ""
 
     return str(text).lower().strip()
 
 
 def normalize_website(text):
-    if text is None:
+    if is_missing(text):
         return ""
 
     text = str(text).lower().strip()
@@ -67,7 +72,7 @@ def normalize_website(text):
 
 
 def normalize_text(text):
-    if text is None:
+    if is_missing(text):
         return ""
 
     text = str(text).lower().strip()
@@ -210,10 +215,8 @@ def evaluate_file(ground_truth_file):
 
         prediction_data = json.load(f)
 
-    predicted = prediction_data.get(
-        "fields",
-        {}
-    )
+    # Support both legacy detailed OCR output and the fields-only JSON output.
+    predicted = prediction_data.get("fields", prediction_data)
 
     results = {}
 
@@ -307,14 +310,14 @@ def main():
                 correct[field] += 1
 
                 print(
-                    f"{field:<15} ✓ "
+                    f"{field:<15} [OK] "
                     f"{result['similarity']:.2f}"
                 )
 
             else:
 
                 print(
-                    f"{field:<15} ✗ "
+                    f"{field:<15} [FAIL] "
                     f"{result['similarity']:.2f}"
                 )
 
@@ -331,6 +334,10 @@ def main():
     # --------------------------------------------------
     # Summary
     # --------------------------------------------------
+
+    if total_cards == 0:
+        print("No prediction files were available to evaluate.")
+        return
 
     print("\n")
     print("=" * 60)

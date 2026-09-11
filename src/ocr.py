@@ -198,17 +198,6 @@ for image_path in image_paths:
 
             
 
-            print("\n" + "=" * 60)
-            print("GLiNER ENTITIES")
-            print("=" * 60)
-
-            for entity in gliner_entities:
-                print(
-                    f"{entity['text']} "
-                    f"-> {entity['label']} "
-                    f"({entity['score']:.3f})"
-                )
-
             # Combine both
             fields, field_confidence, field_levels = resolve_fields(
                 ocr_items,
@@ -221,23 +210,7 @@ for image_path in image_paths:
             # Create JSON
             # ------------------------------------------------
 
-            output_data = {
-
-                "image": image_path.name,
-
-                "fields": fields,
-
-                "gliner": gliner_entities,
-
-                "ocr": ocr_items,
-
-                "field_levels": field_levels,
-
-                "field_confidence": field_confidence,
-
-                "reconstructed_text": reconstructed_text
-
-            }
+            output_data = fields
 
 
             # ------------------------------------------------
@@ -268,20 +241,12 @@ for image_path in image_paths:
             # Print result
             # ------------------------------------------------
 
-            print("\nReconstructed OCR:")
-            print(reconstructed_text)
-
-            print("\nExtracted fields:")
-
-            for key, value in fields.items():
-
-                print(
-                    f"{key}: {value}"
-                )
-
-
             print(
-                f"\nJSON saved to: {output_path}"
+                json.dumps(
+                    output_data,
+                    indent=4,
+                    ensure_ascii=False
+                )
             )
 
 
