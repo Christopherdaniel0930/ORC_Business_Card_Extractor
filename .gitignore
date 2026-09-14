@@ -19,6 +19,7 @@ paddlex/
 # Generated files
 outputs/
 data/debug/
+data/uploads/
 data/images/camera_capture_*.jpg
 
 # OS

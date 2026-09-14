@@ -72,6 +72,7 @@ safetensors==0.8.0
 shapely==2.1.2
 six==1.17.0
 sympy==1.14.0
+streamlit>=1.40
 torch==2.14.0
 torchvision==0.29.0
 tqdm==4.70.0

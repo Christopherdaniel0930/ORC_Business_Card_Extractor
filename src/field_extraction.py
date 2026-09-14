@@ -397,16 +397,42 @@ def get_box_center(box):
 
     return center_x, center_y
 
+def get_word_text(item):
+    """
+    Return the text reconstructed from real PaddleOCR
+    word-level tokens.
+    """
+
+    words = item.get("words", [])
+
+    if not words:
+        return item["text"]
+
+    return " ".join(
+        word["text"]
+        for word in words
+        if word.get("text", "").strip()
+    )
+
+def get_word_boxes(item):
+    """
+    Return real PaddleOCR word-level boxes.
+    """
+
+    return [
+        word["box"]
+        for word in item.get("words", [])
+        if word.get("text", "").strip()
+    ]
 
 # ============================================================
 # CREATE OCR ITEMS
 # ============================================================
 
-def create_items(texts, boxes):
-
+def create_items(texts, boxes, ocr_items=None):
     items = []
 
-    for text, box in zip(texts, boxes):
+    for i, (text, box) in enumerate(zip(texts, boxes)):
 
         text = clean_text(text)
 
@@ -417,7 +443,7 @@ def create_items(texts, boxes):
 
         center_x, center_y = get_box_center(box)
 
-        items.append({
+        item = {
             "text": text,
             "box": box,
             "x1": x1,
@@ -425,11 +451,20 @@ def create_items(texts, boxes):
             "x2": x2,
             "y2": y2,
             "center_x": center_x,
-            "center_y": center_y
-        })
+            "center_y": center_y,
+            "words": []
+        }
+
+        # Preserve real PaddleOCR word-level boxes
+        if ocr_items is not None and i < len(ocr_items):
+            item["words"] = ocr_items[i].get(
+                "words",
+                []
+            )
+
+        items.append(item)
 
     return items
-
 
 # ============================================================
 # GROUP ADDRESS LINES
@@ -825,7 +860,7 @@ def merge_organization_lines(lines, name_line=None, designation_line=None):
 
     if not filtered_lines:
         return None
-
+  
     # Find organization candidates
     candidates = []
 
@@ -898,7 +933,7 @@ def merge_organization_lines(lines, name_line=None, designation_line=None):
 
     return organization_text
 
-def extract_fields(texts, boxes, gliner_entities=None):
+def extract_fields(texts, boxes, gliner_entities=None, ocr_items = None):
 
     result = {
         "name": None,
@@ -916,7 +951,8 @@ def extract_fields(texts, boxes, gliner_entities=None):
 
     items = create_items(
         texts,
-        boxes
+        boxes,
+        ocr_items
     )
 
     remaining = []
