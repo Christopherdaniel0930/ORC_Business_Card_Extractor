@@ -63,5 +63,5 @@ def extract_deterministic(text: str) -> dict:
         "phone": phone,
         "fax": fax,
         "website": _clean(urls[0]) if urls else None,
-        "address": ", ".join(address_lines) if address_lines else None,
+        "address": "\n".join(address_lines) if address_lines else None,
     }

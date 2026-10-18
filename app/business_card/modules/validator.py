@@ -35,4 +35,4 @@ def validate_business_card(data) -> BusinessCardData:
     try:
         return BusinessCardData.model_validate(values)
     except ValidationError:
-        raise
+        raise 

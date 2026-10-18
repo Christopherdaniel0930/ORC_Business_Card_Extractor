@@ -1,0 +1,5 @@
+*.env
+**/__pycache__/
+RE/
+.pytest_cache/
+*New folder
