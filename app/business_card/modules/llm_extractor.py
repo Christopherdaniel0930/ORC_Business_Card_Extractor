@@ -7,7 +7,10 @@ FIELDS = ("name", "designation", "company_name")
 
 
 def build_business_card_prompt(ocr_text: str) -> str:
-    return '''Extract business card fields from the OCR text below. Use only information present in the OCR text. Never invent values. Return null when information is missing. Do not infer a company name without evidence. Do not confuse designation with company name. Return strict JSON matching exactly this schema: {"name": null, "designation": null, "company_name": null}. Do not return any other fields or explanation.\n\nOCR TEXT:\n''' + str(ocr_text or "")
+    return '''Extract business card fields from the OCR text below. Use only information present in the OCR text. 
+        Never invent values. Return null when information is missing. Do not infer a company name without evidence. 
+        Do not confuse designation with company name. Return strict JSON matching exactly this schema: {"name": null, "designation": null, "company_name": null}. 
+        Do not return any other fields or explanation.\n\nOCR TEXT:\n''' + str(ocr_text or "")
 
 
 def extract_business_card_semantics(ocr_text: str, llm_client=None) -> dict:

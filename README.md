@@ -1,26 +1,52 @@
 # Business Card Extractor
 
-A Python library-style pipeline for extracting contact details from business card images. The project runs OCR locally with RapidOCR, extracts contact fields with regular expressions, uses an OpenAI-compatible LLM for name, designation, and company name, then validates the combined result with Pydantic.
+A Python pipeline and REST service for extracting structured contact details from business card images. The pipeline runs OCR locally with **RapidOCR**, extracts contact fields with **regular expressions**, uses an **OpenAI-compatible LLM** (e.g. Ollama) for semantic extraction (name, designation, and company name), and validates the combined result using **Pydantic**.
 
-## Pipeline
+---
 
-1. `app.common.document_pipeline.process_document(image_path)` runs OCR once and prepares the recognized text and rows.
-2. `app.business_card.pipeline.process_business_card(...)` extracts deterministic contact details and LLM semantic fields, merges them, and returns a `BusinessCardData` model.
+## Pipeline Overview
 
-Fields are optional strings: `name`, `designation`, `company_name`, `phone`, `fax`, `email`, `website`, and `address`.
+1. **OCR Processing:** [`app.common.document_pipeline.process_document(image_path)`](file:///d:/business_extractor/app/common/document_pipeline.py) runs RapidOCR once to extract recognized text and bounding boxes.
+2. **Extraction & Merging:** [`app.business_card.pipeline.process_business_card(...)`](file:///d:/business_extractor/app/business_card/pipeline.py):
+   - **Deterministic Extraction:** Regular expressions parse `phone`, `fax`, `email`, `website`, and `address`.
+   - **Semantic Extraction:** Prompt sent to configured LLM (Ollama) extracts `name`, `designation`, and `company_name`.
+   - **Merger & Validation:** Combines fields and validates them into a [`BusinessCardData`](file:///d:/business_extractor/app/business_card/models/business_card_model.py) model.
 
-## Requirements and setup
+### Extracted Fields
 
-- Python 3.11 or 3.12 (declared supported versions)
-- An Ollama or OpenAI-compatible chat completions endpoint for semantic fields
+All fields are optional strings (`Optional[str]`), defaulting to `null` if not found:
 
-Install the project dependencies:
+| Field | Extraction Method | Description |
+|---|---|---|
+| `name` | LLM | Individual's full name |
+| `designation` | LLM | Job title or role |
+| `company_name` | LLM | Organization or business name |
+| `phone` | Regex | Telephone / mobile number |
+| `fax` | Regex | Fax number |
+| `email` | Regex | Email address |
+| `website` | Regex | Website or URL |
+| `address` | Regex | Physical address |
+
+---
+
+## Requirements & Setup
+
+- **Python:** 3.11 or 3.12
+- **LLM Service:** An Ollama or OpenAI-compatible endpoint providing a chat completion model.
+
+### 1. Install Dependencies
 
 ```bash
 python -m pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and set the endpoint and model:
+### 2. Environment Configuration
+
+Copy `.env.example` to `.env` and set your Ollama/LLM parameters:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 OLLAMA_BASE_URL=http://localhost:11434/v1
@@ -28,40 +54,114 @@ OLLAMA_API_KEY=ollama
 OLLAMA_MODEL=qwen3:8b
 ```
 
-The default endpoint in code is `https://ollama.com/v1`; set `OLLAMA_BASE_URL` explicitly for local Ollama. The configured model must be available from that endpoint.
+> [!NOTE]
+> Ensure the specified `OLLAMA_MODEL` is pulled and running on your local Ollama server (e.g., `ollama pull qwen3:8b`).
 
-## Run extraction from the terminal
+---
 
-From the repository root, start the interactive extractor:
+## Running the Application
+
+### Option A: Interactive CLI
+
+Run the interactive terminal extractor from the project root:
 
 ```bash
 python -m app.cli
 ```
 
-When prompted, enter or paste the path to a business card image, for example `data/business_card/test/1.jpg`. The extracted fields are printed as JSON. The path can be absolute or relative to the current directory.
+Provide the path to an image when prompted (e.g., `data/business_card/test/1.jpg`). The output will be printed as structured JSON.
 
-The command uses RapidOCR and the configured LLM client. For tests or custom integrations, call `process_document(image_path)` from `app.common.document_pipeline` and optionally inject an `llm_client` implementing `extract(prompt)`.
+### Option B: FastAPI REST Service
 
-## Tests
-
-Run the business-card and document-pipeline tests:
+The FastAPI application is defined in `app/api/api.py`. Start it from the project root using `uvicorn`:
 
 ```bash
-pytest -q tests/business_card tests/test_document_pipeline.py
+uvicorn app.api:app --reload
 ```
 
-The OCR test uses a sample under `data/business_card/test/`. Pipeline tests inject fake OCR and LLM clients and do not need a live model endpoint.
+#### API Specification: `POST /api/v1/documents`
 
-## Project structure
+Extracts business card details from an uploaded image file.
+
+- **Request Format:** `multipart/form-data`
+- **Form Field:** `file` (UploadFile)
+- **Supported Formats:** JPEG, PNG, WEBP
+- **Limits:** Max file size 10 MB, max image dimensions 40 Megapixels
+
+**Success Response (`200 OK`):**
+
+```json
+{
+  "document_type": "business_card",
+  "result": {
+    "name": "Jane Doe",
+    "designation": "Chief Technology Officer",
+    "company_name": "Acme Innovations",
+    "phone": "+1-555-0199",
+    "fax": null,
+    "email": "jane.doe@acme.com",
+    "website": "https://www.acme.com",
+    "address": "123 Innovation Way, Suite 400"
+  }
+}
+```
+
+**Common Error Responses:**
+
+| Status Code | Reason |
+|---|---|
+| `400 Bad Request` | Corrupted or unreadable image file |
+| `413 Request Entity Too Large` | Image exceeds 10 MB or 40 megapixels |
+| `415 Unsupported Media Type` | Unsupported image format (not JPEG/PNG/WEBP) |
+| `422 Unprocessable Entity` | OCR could not extract any text from the card |
+| `500 Internal Server Error` | Unexpected processing failure during extraction |
+
+---
+
+## Testing
+
+Run the test suite using `pytest`:
+
+```bash
+pytest -q
+```
+
+Tests are split into:
+- `tests/`: Module-level unit tests for deterministic parsing, merging, validator, and pipeline mocks.
+- `testing/`: Scoped tests categorized into `unit`, `integration`, and `component`.
+
+Pipeline tests utilize fake/mocked clients and do not require a running LLM server.
+
+---
+
+## Project Structure
 
 ```text
-app/
-  business_card/       Extraction pipeline, modules, and output model
-  common/              Settings, OCR, LLM client, document bridge, and timing hooks
-  cli.py               Interactive terminal extractor
-data/                  Sample business card images
-tests/                 Business-card and document-pipeline tests
-.env.example           Environment configuration template
-pyproject.toml          Package metadata and pytest configuration
-requirements.txt        Dependencies
+business_extractor/
+├── app/
+│   |
+│   ├── business_card/
+│   │   ├── models/                # BusinessCardData Pydantic model
+│   │   ├── modules/
+│   │   │   ├── deterministic_extractor.py  # Regex extraction (phone, email, etc.)
+│   │   │   ├── llm_extractor.py            # Prompt builder and LLM client caller
+│   │   │   ├── merger.py                   # Combines deterministic & semantic outputs
+│   │   │   └── validator.py                # Field normalization & validation
+│   │   ├── schemas/               # Exported schemas
+│   │   └── pipeline.py            # Pipeline orchestrator
+│   ├── common/
+│   │   ├── config.py              # Environment configuration & settings
+│   │   ├── document_pipeline.py   # OCR bridge and document processor
+│   │   ├── llm_client.py          # OpenAI/Ollama API wrapper
+│   │   ├── logging.py             # Logging setup
+│   │   ├── ocr.py                 # RapidOCR integration
+│   │   └── processing_timing.py   # Stage timing utilities
+│   ├── api.py                     # FastAPI application & business card endpoint
+│   └── cli.py                     # Interactive CLI entrypoint
+├── data/                          # Sample test images
+├── tests/                         # Root test suite
+├── testing/                       # Component, integration, and unit test suites
+├── .env.example                   # Environment variable template
+├── pyproject.toml                 # Build config & test settings
+└── requirements.txt               # Dependencies
 ```

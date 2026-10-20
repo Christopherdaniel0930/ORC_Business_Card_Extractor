@@ -15,7 +15,7 @@ class OllamaClient:
             raise RuntimeError("OLLAMA_MODEL is not configured")
         self.client = OpenAI(
             api_key=os.getenv("OLLAMA_API_KEY", "ollama"),
-            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://ollama/v1"),
         )
 
     def extract(self, prompt: str) -> str:
