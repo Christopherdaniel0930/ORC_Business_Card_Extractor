@@ -79,6 +79,8 @@ The FastAPI application is defined in `app/api/api.py`. Start it from the projec
 uvicorn app.api:app --reload
 ```
 
+Open the [Swagger UI](http://127.0.0.1:8000/docs) to explore and try the API endpoints.
+
 #### API Specification: `POST /api/v1/documents`
 
 Extracts business card details from an uploaded image file.
